@@ -14,34 +14,34 @@ uAdmin = config.get(section, 'AdminUser')
 uPass = config.get(section, 'AdminPassword')
 uHistory = config.getboolean(section, 'SaveHistory')
 fileHistory = config.get(section, 'HistoryFile')
-
+# настройка для информационного обмена
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-# Bind the server to IP Address
+# Привязка сервера к ip-адресу
 server.bind((host, port))
-# Start Listening Mode
+# Сервер готов к приему информации
 server.listen()
-# List to contain the Clients getting connected and nicknames
+# Списки клиентов с никами (изначально пустые, вход для пользователей без пароля, пароль - только для админа)
 clients = []
 nicknames = []
 
-# 1.Broadcasting Method
+# 1.Передача сообщений в архив
 def broadcast(message):
     for client in clients:
         client.send(message)
-        if uHistory:
+        if uHistory:  # Если в настройках конфигурации SaveHistory=True, то история чата сохраняется в отдельный файл 
             with open(fileHistory, 'a', encoding=encoding) as f:
                 fms = f'{message.decode()}\n'
                 f.write(fms)
 
 
 
-# 2.Recieving Messages from client then broadcasting
+# 2.Прием сообщений от клиентов
 def handle(client):
     while True:
         try:
-            msg = message = client.recv(4096)
+            msg = message = client.recv(4096) # сообщения принимаются на сервере и классифицируются по стартовому признаку на пользовательские и служебные, обрабатываются 
             if msg.decode(encoding).startswith('USERS'):
-                if nicknames[clients.index(client)] == uAdmin:
+                if nicknames[clients.index(client)] == uAdmin:  
                     client.send('USERS'.encode(encoding))
                     strnicks = ''
                     for item in nicknames:
@@ -79,24 +79,24 @@ def handle(client):
         except:
             if client in clients:
                 index = clients.index(client)
-                # Index is used to remove client from list after getting diconnected
+                # Индекс используется для удаления клиента из списков после отключения
                 client.remove(client)
                 client.close
                 nickname = nicknames[index]
-                broadcast(f'{nickname} left the Chat!'.encode(encoding))
+                broadcast(f'{nickname} покинул(а) чат!'.encode(encoding))
                 nicknames.remove(nickname)
                 break
 
 
-# Main Recieve method
+# Основной блок
 def recieve():
     while True:
         client, address = server.accept()
-        print(f"Connected with {str(address)}")
-        # Ask the clients for Nicknames
+        print(f"Соединение с {str(address)}")
+        # Запрос никнейма
         client.send('NICK'.encode(encoding))
         nickname = client.recv(4096).decode(encoding)
-        # If the Client is an Admin promopt for the password.
+        # проверка клиента по "черному списку"
         with open('bans.txt', 'r') as f:
             bans = f.readlines()
 
@@ -104,24 +104,24 @@ def recieve():
             client.send('BAN'.encode(encoding))
             client.close()
             continue
-
+        # Если клиент является админом, то надо запросить пароль
         if nickname == 'admin':
             client.send('PASS'.encode(encoding))
             password = client.recv(4096).decode(encoding)
-            # I know it is lame, but my focus is mainly for Chat system and not a Login System
+            
             if password != uPass:
-                client.send('REFUSE'.encode(encoding))
+                client.send('Отказано'.encode(encoding))
                 client.close()
                 continue
-
+        # добавление клиента
         nicknames.append(nickname)
         clients.append(client)
 
-        print(f'Nickname of the client is {nickname}')
-        broadcast(f'{nickname} joined the Chat'.encode(encoding))
-        client.send('Connected to the Server!'.encode(encoding))
+        print(f'Никнейм клиента {nickname}')
+        broadcast(f'{nickname} добавился в чат'.encode(encoding))
+        client.send('Соединение с серввером!'.encode(encoding))
 
-        # Handling Multiple Clients Simultaneously
+        # Обработка нескольких клиентов
         thread = threading.Thread(target=handle, args=(client,))
         thread.start()
 
@@ -132,12 +132,12 @@ def kick_user(name):
         name_index = nicknames.index(name)
         client_to_kick = clients[name_index]
         clients.remove(client_to_kick)
-        client_to_kick.send('You Were Kicked from Chat !'.encode(encoding))
+        client_to_kick.send('Вы не допущены в чат!'.encode(encoding))
         client_to_kick.close()
         nicknames.remove(name)
-        broadcast(f'{name} was kicked from the server!'.encode(encoding))
+        broadcast(f'{name} исключен из чата!'.encode(encoding))
 
 
-# Calling the main method
-print(f'Server is Listening at [{host}:{port}] encoding: [{encoding}]...')
+# Вызов основного метода
+print(f'Сервер на линии [{host}:{port}] encoding: [{encoding}]...')
 recieve()
